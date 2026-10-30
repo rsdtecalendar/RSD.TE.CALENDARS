@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calendar</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <style>
+    :root{
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;
+      color-scheme:light;
+      --bg:#fff; --fg:#222; --card:#fff; --border:#e3e3e3; --muted:#eee;
+      --btn:#f7f7f7; --btn-border:#ccc; --ev-bg:#f1f8ff; --sel-bg:#fdecea;
+      --owner-bg:#e8e8e8; --owner-fg:#555; --danger:#c0392b; --danger-bg:#fdecea;
+      --ok-bg:#eaf5ea; --ok-fg:#2e7d32; --ok-bd:#a5d6a7;
+      --load-bg:#fff8e1; --load-fg:#f57f17; --load-bd:#ffe082;
+    }
+    :root[data-theme="dark"]{
+      color-scheme:dark;
+      --bg:#121417; --fg:#e6e6e6; --card:#1c1f24; --border:#2c3138; --muted:#262b31;
+      --btn:#262b31; --btn-border:#3a414a; --ev-bg:#1e2a38; --sel-bg:#3a1f1f;
+      --owner-bg:#2c3138; --owner-fg:#aab; --danger:#ff6b5e; --danger-bg:#3a1f1f;
+      --ok-bg:#1b3a24; --ok-fg:#7bd88f; --ok-bd:#2e6b3f;
+      --load-bg:#3a3118; --load-fg:#ffc857; --load-bd:#6b5a20;
+    }
+    body{max-width:900px;margin:24px auto;padding:16px;background:var(--bg);color:var(--fg);}
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;}
+    .nav button,#themeBtn{padding:8px 12px;border-radius:6px;border:1px solid var(--btn-border);background:var(--btn);color:var(--fg);cursor:pointer;}
+    .month-title{font-size:1.25rem;font-weight:600;margin:8px 0;}
+    .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .weekday{font-weight:700;text-align:center;padding:8px 4px;background:var(--muted);border-radius:6px;}
+    .day{height:92px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px;position:relative;cursor:pointer;overflow:hidden;}
+    .day.out{opacity:0.35}
+    .day.today{background:#dbeafe;border:2px solid #2563eb;}
+    .day.today .date-num{background:#2563eb;color:#fff;border-radius:50%;min-width:24px;height:24px;line-height:24px;text-align:center;top:4px;right:6px;}
+    :root[data-theme="dark"] .day.today{background:#1e3a5f;border-color:#60a5fa;}
+    :root[data-theme="dark"] .day.today .date-num{background:#60a5fa;color:#0b1220;}
+    .day .date-num{position:absolute;top:6px;right:8px;font-weight:600}
+    .events{margin-top:22px;display:flex;flex-direction:column;gap:3px;overflow:hidden;}
+    .event{font-size:0.7rem;line-height:1.2;padding:2px 5px;border-left:4px solid #4a90e2;background:var(--ev-bg);border-radius:4px;white-space:normal;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;text-overflow:ellipsis;}
+    .event-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-left:4px solid #4a90e2;background:var(--ev-bg);border-radius:4px;margin-bottom:4px;cursor:pointer;user-select:none;}
+    .event-row.selected{background:var(--sel-bg);outline:2px solid var(--danger);}
+    .event-row .event-text{flex:1;font-size:0.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .event-row .event-owner{font-size:0.78rem;color:var(--owner-fg);white-space:nowrap;padding:1px 6px;background:var(--owner-bg);border-radius:10px;}
+    .event-row .del-btn{flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:0 4px;line-height:1;border-radius:4px;}
+    .event-row .del-btn:hover{background:var(--danger-bg);}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .add-form{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    input[type="text"],input[type="time"],input[type="date"],select{padding:6px 8px;border-radius:6px;border:1px solid var(--btn-border);background:var(--card);color:var(--fg);}
+    .add-form input[type="text"]{flex:1;min-width:100px;padding:8px;}
+    input[type="color"]{width:40px;height:36px;border:none;padding:0;cursor:pointer;border-radius:6px;background:none;}
+    .add-form button{padding:8px 14px;border-radius:6px;border:1px solid var(--btn-border);background:#4a90e2;color:#fff;cursor:pointer;font-weight:600;}
+    .add-form button:hover{background:#2e6db4;}
+    .del-selected-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--danger);background:var(--danger-bg);color:var(--danger);cursor:pointer;font-size:0.85rem;font-weight:600;}
+    .del-selected-btn:hover{background:var(--danger);color:#fff;}
+    .toolbar{display:flex;align-items:center;gap:8px;margin-top:8px;min-height:32px;}
+    #syncStatus{font-size:0.78rem;padding:3px 10px;border-radius:10px;background:var(--ok-bg);color:var(--ok-fg);border:1px solid var(--ok-bd);}
+    #syncStatus.error{background:var(--danger-bg);color:var(--danger);border-color:var(--danger);}
+    #syncStatus.loading{background:var(--load-bg);color:var(--load-fg);border-color:var(--load-bd);}
+    .holiday-btn{padding:8px 12px;border-radius:6px;border:1px solid #e74c3c;background:var(--danger-bg);color:var(--danger);cursor:pointer;font-weight:600;font-size:0.85rem;}
+    .holiday-btn:hover{background:#e74c3c;color:#fff;}
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="nav">
+      <button id="prev">&lt; <span id="txtPrev"></span></button>
+      <button id="today"></button>
+      <button id="next"><span id="txtNext"></span> &gt;</button>
+    </div>
+    <div class="month-title" id="monthTitle"></div>
+    <div class="controls">
+      <button id="themeBtn" title="Dark / Light">🌙</button>
+      <span id="syncStatus" class="loading">Connection...</span>
+      <button id="clearLeaveBtn" class="holiday-btn">ลบวันหยุดทั้งหมด</button>
+      <button id="uploadHolidayBtn" class="holiday-btn"></button>
+      <input type="file" id="holidayFile" accept=".txt" style="display:none" />
+      <label>Language:
+        <select id="langSelect">
+          <option value="th">ไทย</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <select id="monthSelect"></select>
+      <select id="yearSelect"></select>
+    </div>
+  </div>
+
+  <div class="calendar" id="calendar"></div>
+  <div id="selectedInfo" style="margin-top:16px"></div>
+
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+    emailjs.init({ publicKey: "DBAm8LCh04YO8AuR8" }); // <-- ใส่ Public Key จาก EmailJS > Account > General
+  </script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // =====  Firebase config  =====
+    const firebaseConfig = {
+    	apiKey: "AIzaSyBTzAi_jg97Ld-JRk9Gbd475Vw5AlyeRmc",
+    	authDomain: "test-calendar-febdc.firebaseapp.com",
+    	databaseURL: "https://test-calendar-febdc-default-rtdb.asia-southeast1.firebasedatabase.app",
+    	projectId: "test-calendar-febdc",
+    	storageBucket: "test-calendar-febdc.firebasestorage.app",
+    	messagingSenderId: "289167896050",
+    	appId: "1:289167896050:web:4719a22a23e1f405924f6b",
+    	measurementId: "G-BTN97YFCHL"
+    };
+    // =============================================
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const eventsRef = ref(db, 'events');
+
+    let lang = "th";
+    let events = {};
+
+    const TEXT = {
+      th: {
+        weekdays: ['อา','จ','อ','พ','พฤ','ศ','ส'],
+        today: "วันนี้", prev: "ก่อนหน้า", next: "ถัดไป",
+        noEvent: "ยังไม่มีรายการ", addBtn: "เพิ่ม",
+        months: ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"],
+        confirmDel: "ลบ event นี้?",
+        confirmDelMany: (n) => `ลบ ${n} event ที่เลือก?`,
+        delSelected: (n) => `ลบที่เลือก (${n})`,
+        placeholderEvent: "ชื่อ event...",
+        placeholderOwner: "ชื่อเจ้าของ...",
+        connected: "Connected",
+        connecting: "Connecting",
+        errorConn: "Error Connect",
+        uploadHoliday: "นำเข้าวันหยุด (.txt)",
+        importDone: (n) => `นำเข้าวันหยุดสำเร็จ ${n} รายการ`,
+        importSkip: (n) => ` (ข้าม ${n} บรรทัดที่อ่านไม่ได้)`,
+        importEmpty: "ไม่พบรายการที่อ่านได้ในไฟล์นี้",
+        clearLeave: "ลบวันหยุดทั้งหมด",
+        noLeave: "ไม่พบวันหยุด",
+        enterPwd: "กรอกรหัสผ่านเพื่อลบวันหยุดทั้งหมด:",
+        wrongPwd: "รหัสผ่านไม่ถูกต้อง",
+        confirmClear: (n) => `ลบวันหยุดทั้งหมด ${n} รายการ? (กู้คืนไม่ได้)`
+      },
+      en: {
+        weekdays: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+        today: "Today", prev: "Prev", next: "Next",
+        noEvent: "No events", addBtn: "Add",
+        months: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+        confirmDel: "Delete this event?",
+        confirmDelMany: (n) => `Delete ${n} selected event(s)?`,
+        delSelected: (n) => `Delete selected (${n})`,
+        placeholderEvent: "Event name...",
+        placeholderOwner: "Owner name...",
+        connected: "Connected",
+        connecting: "Connecting...",
+        errorConn: "Connection failed",
+        uploadHoliday: "Import holidays (.txt)",
+        importDone: (n) => `Imported ${n} holiday(s)`,
+        importSkip: (n) => ` (skipped ${n} unreadable line(s))`,
+        importEmpty: "No readable entries found in this file",
+        clearLeave: "Delete all holidays",
+        noLeave: "No holidays found",
+        enterPwd: "Enter password to delete all holidays:",
+        wrongPwd: "Incorrect password",
+        confirmClear: (n) => `Delete all ${n} holidays? (cannot be undone)`
+      }
+    };
+
+    // ===== แปลชื่อ event การลาตามภาษาที่เลือก (แสดงผลเท่านั้น ไม่แก้ข้อมูลใน Firebase) =====
+    const LEAVE_TH_EN = [
+      ['ลาครึ่งวันเช้า','Half-day leave (AM)'], ['ลาครึ่งวันบ่าย','Half-day leave (PM)'], ['ลาครึ่งวัน','Half-day leave'],
+      ['ลาพักร้อน','Vacation leave'], ['ลาพักผ่อน','Vacation leave'], ['ลาป่วย','Sick leave'],
+      ['ลากิจ','Personal leave'], ['ลาคลอด','Maternity leave'], ['ลาบวช','Ordination leave']
+    ].map(([th,en]) => [new RegExp('(^|[\\s(\\[\\-/:,])' + th, 'g'), '$1' + en]);
+    LEAVE_TH_EN.push([/(^|[\s(\[\-\/:,])ลา(?![\u0E00-\u0E7F])/g, '$1Leave']);
+    LEAVE_TH_EN.push([/ครึ่งวัน/g, 'half day']);
+
+    const LEAVE_EN_TH = [
+      [/\bhalf[- ]day leave \(am\)/gi, 'ลาครึ่งวันเช้า'], [/\bhalf[- ]day leave \(pm\)/gi, 'ลาครึ่งวันบ่าย'],
+      [/\bhalf[- ]day leave\b/gi, 'ลาครึ่งวัน'], [/\b(?:vacation|annual) leave\b/gi, 'ลาพักร้อน'],
+      [/\bsick leave\b/gi, 'ลาป่วย'], [/\bpersonal leave\b/gi, 'ลากิจ'],
+      [/\bmaternity leave\b/gi, 'ลาคลอด'], [/\bordination leave\b/gi, 'ลาบวช'],
+      [/\bleave\b/gi, 'ลา'], [/\bhalf[- ]day\b/gi, 'ครึ่งวัน']
+    ];
+
+    function trEvent(text) {
+      let t = String(text == null ? '' : text);
+      const rules = lang === 'en' ? LEAVE_TH_EN : LEAVE_EN_TH;
+      rules.forEach(([re, rep]) => { t = t.replace(re, rep); });
+      return t;
+    }
+
+    // วันที่ปัจจุบันตามเวลาประเทศไทย (Asia/Bangkok) ไม่ขึ้นกับ timezone ของเครื่อง
+    function thaiNow() {
+      const p = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date()).split('-').map(Number);
+      return new Date(p[0], p[1] - 1, p[2]);
+    }
+
+    let viewDate = thaiNow();
+    let currentSelectedDate = null;
+    const calendarEl = document.getElementById('calendar');
+    const monthTitle = document.getElementById('monthTitle');
+    const selectedInfo = document.getElementById('selectedInfo');
+    const langSelect = document.getElementById('langSelect');
+    const syncStatus = document.getElementById('syncStatus');
+
+    function formatKey(date) {
+  	const y = date.getFullYear();
+  	const m = String(date.getMonth() + 1).padStart(2, '0');
+ 	const d = String(date.getDate()).padStart(2, '0');
+  	return `${y}-${m}-${d}`;
+	}
+
+    function saveEvents() {
+      return set(eventsRef, events);
+    }
+
+    // ===== แจ้งเตือนทางอีเมล (EmailJS) =====
+    const EMAILJS_SERVICE  = "service_ljdqd8m";
+    const EMAILJS_TEMPLATE = "template_3e4sw29";
+    const NOTIFY_ONLY_LEAVE = false;            // true = ส่งเฉพาะ event ที่มีคำว่า "ลา" / leave, false = ส่งทุก event
+    const LEAVE_NOTIFY_RE = /ลา|leave/i;
+    let lastNotifyAt = 0;
+
+    function notifyEvent(ev) {
+      console.log('[notify] called', ev);
+      if (typeof emailjs === 'undefined') return console.warn('[notify] emailjs SDK not loaded');
+      if (NOTIFY_ONLY_LEAVE && !LEAVE_NOTIFY_RE.test(ev.text)) return console.warn('[notify] skipped: not a leave event');
+      if (Date.now() - lastNotifyAt < 5000) return console.warn('[notify] skipped: sent less than 5s ago');   // กันกดซ้ำรัว
+      lastNotifyAt = Date.now();
+
+      const dateStr = ev.dateStart === ev.dateEnd ? ev.dateStart : `${ev.dateStart} ถึง ${ev.dateEnd}`;
+      const timeStr = (ev.startTime || ev.endTime) ? `${ev.startTime || '-'} - ${ev.endTime || '-'}` : '-';
+
+      emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+        name: ev.owner || '-',
+        date: dateStr,
+        type: ev.text,
+        note: timeStr,
+        time: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+      }).then(
+        () => console.log('Notification sent'),
+        (err) => console.error('EmailJS error:', err)
+      );
+    }
+
+    // Real-time listener — sync user พร้อมกัน
+    onValue(eventsRef, (snapshot) => {
+      events = snapshot.val() || {};
+      syncStatus.textContent = TEXT[lang].connected;
+      syncStatus.className = '';
+      render();
+      if(currentSelectedDate) showSelected(currentSelectedDate);
+    }, (error) => {
+      syncStatus.textContent = TEXT[lang].errorConn;
+      syncStatus.className = 'error';
+    });
+
+    function render() {
+      document.getElementById("today").textContent = TEXT[lang].today;
+      document.getElementById("txtPrev").textContent = TEXT[lang].prev;
+      document.getElementById("txtNext").textContent = TEXT[lang].next;
+      document.getElementById("uploadHolidayBtn").textContent = TEXT[lang].uploadHoliday;
+      document.getElementById("clearLeaveBtn").textContent = TEXT[lang].clearLeave;
+      calendarEl.innerHTML = '';
+
+      for(let i=0;i<7;i++){
+        const w = document.createElement('div');
+        w.className='weekday';
+        w.textContent = TEXT[lang].weekdays[i];
+        calendarEl.appendChild(w);
+      }
+
+      const year = viewDate.getFullYear();
+      const month = viewDate.getMonth();
+      monthTitle.textContent = TEXT[lang].months[month] + " " + year;
+
+      const startDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month+1, 0).getDate();
+      const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
+      const startDate = new Date(year, month, 1 - startDay);
+      const todayKey = formatKey(thaiNow());
+
+      for(let c=0;c<totalCells;c++){
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + c);
+        const cell = document.createElement('div');
+        cell.className = 'day';
+        if(d.getMonth() !== month) cell.classList.add('out');
+
+        const num = document.createElement('div');
+        num.className='date-num';
+        num.textContent = d.getDate();
+        cell.appendChild(num);
+
+        const key = formatKey(d);
+        if(key === todayKey) cell.classList.add('today');
+        if(events[key]){
+          const evs = document.createElement('div');
+          evs.className='events';
+          events[key].slice(0,2).forEach(e=>{
+            const ev = document.createElement('div');
+            ev.className='event';
+            ev.style.borderLeftColor = e.color || '#4a90e2';
+            const timeStr = e.startTime ? e.startTime + (e.endTime? ' - '+e.endTime : '') : '';
+            const ownerStr = e.owner ? ` [${e.owner}]` : '';
+            ev.textContent = (timeStr ? timeStr + ' ' : '') + trEvent(e.text) + ownerStr;
+            evs.appendChild(ev);
+          });
+          cell.appendChild(evs);
+        }
+
+        cell.addEventListener('click', ()=> showSelected(d));
+        calendarEl.appendChild(cell);
+      }
+
+      monthSelect.value = viewDate.getMonth();
+      yearSelect.value = viewDate.getFullYear();
+    }
+
+    function showSelected(date) {
+      currentSelectedDate = date;
+      const key = formatKey(date);
+      let selected = new Set();
+
+      const dateLabel = date.toLocaleDateString(lang==="th"?"th-TH":"en-US", {
+        weekday:'long', year:'numeric', month:'long', day:'numeric'
+      });
+
+      selectedInfo.innerHTML = '';
+      const header = document.createElement('strong');
+      header.textContent = dateLabel;
+      selectedInfo.appendChild(header);
+
+      const body = document.createElement('div');
+      body.style.marginTop = '8px';
+
+      const listEl = document.createElement('div');
+      listEl.id = 'listEvents';
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+
+      const delSelBtn = document.createElement('button');
+      delSelBtn.className = 'del-selected-btn';
+      delSelBtn.style.display = 'none';
+      toolbar.appendChild(delSelBtn);
+
+      function updateToolbar() {
+        if(selected.size > 0){
+          delSelBtn.style.display = '';
+          delSelBtn.textContent = TEXT[lang].delSelected(selected.size);
+        } else {
+          delSelBtn.style.display = 'none';
+        }
+      }
+
+      function renderList() {
+        listEl.innerHTML = '';
+        selected.clear();
+        updateToolbar();
+        const cur = events[key] || [];
+
+        if(cur.length === 0){
+          listEl.innerHTML = `<em>${TEXT[lang].noEvent}</em>`;
+          return;
+        }
+
+        cur.forEach((e, idx) => {
+          const timeStr = e.startTime ? e.startTime + (e.endTime? ' - '+e.endTime : '') : '';
+          const row = document.createElement('div');
+          row.className = 'event-row';
+          row.style.borderLeftColor = e.color || '#4a90e2';
+
+          const txt = document.createElement('span');
+          txt.className = 'event-text';
+          txt.textContent = (timeStr ? timeStr + ' ' : '') + trEvent(e.text);
+          row.appendChild(txt);
+
+          if(e.owner){
+            const ownerBadge = document.createElement('span');
+            ownerBadge.className = 'event-owner';
+            ownerBadge.textContent = e.owner;
+            row.appendChild(ownerBadge);
+          }
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'del-btn';
+          delBtn.title = TEXT[lang].confirmDel;
+          delBtn.innerHTML = '&#10005;';
+          delBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            if(confirm(TEXT[lang].confirmDel)){
+              events[key].splice(idx, 1);
+              if(events[key].length === 0) delete events[key];
+              saveEvents();
+            }
+          };
+
+          row.addEventListener('click', (ev) => {
+            if(ev.ctrlKey || ev.metaKey){
+              if(selected.has(idx)){ selected.delete(idx); row.classList.remove('selected'); }
+              else { selected.add(idx); row.classList.add('selected'); }
+              updateToolbar();
+            }
+          });
+
+          row.appendChild(delBtn);
+          listEl.appendChild(row);
+        });
+      }
+
+      delSelBtn.onclick = () => {
+        if(!selected.size) return;
+        if(confirm(TEXT[lang].confirmDelMany(selected.size))){
+          const indices = Array.from(selected).sort((a,b) => b - a);
+          indices.forEach(i => events[key].splice(i, 1));
+          if(events[key].length === 0) delete events[key];
+          saveEvents();
+        }
+      };
+
+      renderList();
+      body.appendChild(listEl);
+      body.appendChild(toolbar);
+
+      const addForm = document.createElement('div');
+      addForm.className = 'add-form';
+      addForm.innerHTML = `
+        <input id="evtText" type="text" placeholder="${TEXT[lang].placeholderEvent}" />
+        <input id="evtOwner" type="text" placeholder="${TEXT[lang].placeholderOwner}" style="flex:0.6;min-width:80px;" />
+        <input id="evtColor" type="color" value="#4a90e2" />
+        <input id="evtStart" type="time" />
+        <input id="evtEnd" type="time" />
+        <input id="evtDateStart" type="date" />
+        <input id="evtDateEnd" type="date" />
+        <button id="addBtn">${TEXT[lang].addBtn}</button>
+      `;
+      body.appendChild(addForm);
+      selectedInfo.appendChild(body);
+
+      document.getElementById('addBtn').onclick = () => {
+        const txt = document.getElementById('evtText').value.trim();
+        const owner = document.getElementById('evtOwner').value.trim();
+        const color = document.getElementById('evtColor').value;
+        const startTime = document.getElementById('evtStart').value;
+        const endTime = document.getElementById('evtEnd').value;
+        const dateStart = document.getElementById('evtDateStart').value;
+        const dateEnd   = document.getElementById('evtDateEnd').value;
+
+        if(!txt) return alert("Please type event name");
+        if(!dateStart) return alert("Choose start date");
+        if(!dateEnd) return alert("Choose end date");
+
+        const [y1,m1,d1p] = dateStart.split('-').map(Number);
+	const [y2,m2,d2p] = dateEnd.split('-').map(Number);
+	let d1 = new Date(y1, m1-1, d1p);
+	let d2 = new Date(y2, m2-1, d2p);
+        if(d2 < d1) return alert("End date must be after start date");
+
+        while(d1 <= d2){
+          const k = formatKey(d1);
+          events[k] = events[k] || [];
+          events[k].push({ text: txt, owner, color, startTime, endTime, multiStart: dateStart, multiEnd: dateEnd });
+          d1.setDate(d1.getDate() + 1);
+        }
+
+        console.log('[notify] saving to Firebase...');
+        saveEvents().then(() => {
+          notifyEvent({ text: txt, owner, startTime, endTime, dateStart, dateEnd });
+        }).catch(err => console.error('[notify] Firebase save failed:', err));
+      };
+    }
+
+    document.getElementById('prev').onclick = ()=>{ viewDate.setMonth(viewDate.getMonth()-1); render(); };
+    document.getElementById('next').onclick = ()=>{ viewDate.setMonth(viewDate.getMonth()+1); render(); };
+    document.getElementById('today').onclick = ()=>{ viewDate = thaiNow(); render(); };
+    langSelect.onchange = () => { lang = langSelect.value; initMonthYearPicker(); render(); if(currentSelectedDate) showSelected(currentSelectedDate); };
+
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect  = document.getElementById('yearSelect');
+
+    function initMonthYearPicker() {
+      monthSelect.innerHTML = "";
+      TEXT[lang].months.forEach((m,i)=>{
+        const op = document.createElement('option');
+        op.value = i; op.textContent = m;
+        monthSelect.appendChild(op);
+      });
+      yearSelect.innerHTML = "";
+      const yearNow = thaiNow().getFullYear();
+      for(let y = yearNow-50; y <= yearNow+30; y++){
+        const op = document.createElement('option');
+        op.value = y; op.textContent = y;
+        yearSelect.appendChild(op);
+      }
+      monthSelect.value = viewDate.getMonth();
+      yearSelect.value = viewDate.getFullYear();
+    }
+
+    monthSelect.onchange = ()=>{ viewDate.setMonth(parseInt(monthSelect.value)); render(); };
+    yearSelect.onchange  = ()=>{ viewDate.setFullYear(parseInt(yearSelect.value)); render(); };
+
+    // ===== Import holidays from .txt file =====
+    // Supports separators: comma "," / tab / whitespace
+    // Supports date formats: DD/MM/YYYY (ค.ศ. or พ.ศ.) and YYYY-MM-DD (ค.ศ. or พ.ศ.)
+    function parseDateFlexible(str) {
+      str = str.trim();
+      let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/); // YYYY-MM-DD
+      if(m){
+        let y = parseInt(m[1],10), mo = parseInt(m[2],10), d = parseInt(m[3],10);
+        if(y > 2400) y -= 543; // พ.ศ. -> ค.ศ.
+        return new Date(y, mo-1, d);
+      }
+      m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // DD/MM/YYYY
+      if(m){
+        let d = parseInt(m[1],10), mo = parseInt(m[2],10), y = parseInt(m[3],10);
+        if(y > 2400) y -= 543;
+        return new Date(y, mo-1, d);
+      }
+      return null;
+    }
+
+    function splitLine(line) {
+      if(line.includes(',')) return line.split(',');
+      if(line.includes('\t')) return line.split('\t');
+      const idx = line.search(/\s/);
+      if(idx === -1) return [line];
+      return [line.slice(0, idx), line.slice(idx+1)];
+    }
+
+    function importHolidaysFromText(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      let added = 0;
+      let skipped = 0;
+
+      lines.forEach(line => {
+        const parts = splitLine(line);
+        if(parts.length < 2){ skipped++; return; }
+        const dateStr = parts[0].trim();
+        const name = parts.slice(1).join(',').trim();
+        const d = parseDateFlexible(dateStr);
+        if(!d || isNaN(d.getTime()) || !name){ skipped++; return; }
+
+        const key = formatKey(d);
+        events[key] = events[key] || [];
+        const exists = events[key].some(e => e.isHoliday && e.text === name);
+        if(!exists){
+          events[key].push({ text: name, owner: '', color: '#e74c3c', startTime: '', endTime: '', isHoliday: true });
+          added++;
+        }
+      });
+
+      if(added > 0) saveEvents();
+
+      if(added === 0 && skipped === 0){
+        alert(TEXT[lang].importEmpty);
+      } else {
+        alert(TEXT[lang].importDone(added) + (skipped > 0 ? TEXT[lang].importSkip(skipped) : ''));
+      }
+    }
+
+    document.getElementById('uploadHolidayBtn').onclick = () => {
+      document.getElementById('holidayFile').click();
+    };
+
+    document.getElementById('holidayFile').onchange = (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => importHolidaysFromText(evt.target.result);
+      reader.readAsText(file, 'UTF-8');
+      e.target.value = '';
+    };
+
+    // ===== Dark mode =====
+    const themeBtn = document.getElementById('themeBtn');
+    function applyTheme(t){
+      document.documentElement.dataset.theme = t;
+      themeBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+      try { localStorage.setItem('theme', t); } catch(e){}
+    }
+    let savedTheme = null;
+    try { savedTheme = localStorage.getItem('theme'); } catch(e){}
+    applyTheme(savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    themeBtn.onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+    // ===== ลบวันหยุดทั้งหมด =====
+    document.getElementById('clearLeaveBtn').onclick = async () => {
+      try {
+        const HOLIDAY_RE = /holiday|วันหยุด/i;
+        const toArr = v => Array.isArray(v) ? v.filter(Boolean) : Object.values(v || {});
+        const isLeave = e => e && (e.isHoliday === true || String(e.color || '').toLowerCase() === '#e74c3c' || HOLIDAY_RE.test(String(e.text || '')));
+
+        // อ่านข้อมูลล่าสุดจาก Firebase โดยตรง
+        const snap = await get(eventsRef);
+        const data = snap.val() || {};
+        let n = 0;
+        Object.values(data).forEach(v => { n += toArr(v).filter(isLeave).length; });
+        if(n === 0) return alert(TEXT[lang].noLeave);
+
+        const pwd = prompt(TEXT[lang].enterPwd);
+        if(pwd === null) return;
+        if(pwd !== 'TETH2026') return alert(TEXT[lang].wrongPwd);
+        if(!confirm(TEXT[lang].confirmClear(n))) return;
+
+        const result = {};
+        Object.keys(data).forEach(k => {
+          const keep = toArr(data[k]).filter(e => !isLeave(e));
+          if(keep.length) result[k] = keep;
+        });
+        await set(eventsRef, result);
+        events = result;
+        render();
+        if(currentSelectedDate) showSelected(currentSelectedDate);
+      } catch(err) {
+        console.error(err);
+        alert('Error: ' + err.message);
+      }
+    };
+
+    initMonthYearPicker();
+  </script>
+</body>
+</html>
